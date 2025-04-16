@@ -18,6 +18,9 @@ struct Point;
 #[derive(Component)]
 struct TypeOfCurve;
 
+#[derive(Component)]
+struct ResolutionText;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -56,9 +59,14 @@ fn render_curve(
     a: Single<&mut Transform, (With<StartingPoint>, Without<ControlPoint>, Without<EndPoint>)>,
     b: Query<&mut Transform, (With<ControlPoint>, Without<StartingPoint>, Without<EndPoint>)>,
     c: Single<&mut Transform, (With<EndPoint>, Without<ControlPoint>, Without<StartingPoint>)>,
+    
+    mut resolution: Local<usize>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut resolution_text: Single<&mut Text, With<ResolutionText>>,
 ) {
-    let n_points: usize = 500;
-    let mut curve_points: Vec<Vec3> = Vec::with_capacity(n_points);
+    if *resolution == 0 {
+        *resolution = 10;
+    }
     let control_points: Vec<Vec3> = b.iter().map(|f| f.translation).collect();
 
     let l = control_points.len();
@@ -72,14 +80,20 @@ fn render_curve(
         }
     };
 
-    for i in 0..n_points {
-        let alpha = i as f32/n_points as f32;
-        curve_points.push(f(alpha));
+    let mut previous_point: Vec3 = a.translation;
+    for i in 0..*resolution {
+        let alpha = (i+1) as f32 /(*resolution) as f32;
+        let next_point = f(alpha);
+        gizmos.line(previous_point, next_point, CYAN_100);
+        previous_point = next_point;
     }
 
-    for point in curve_points.into_iter() {
-        gizmos.circle(point, 1.0, CYAN_100);
+    if keyboard_input.just_pressed(KeyCode::ArrowRight) {
+        *resolution += 1;
+    } else if keyboard_input.just_pressed(KeyCode::ArrowLeft) && *resolution != 0 {
+        *resolution -= 1;
     }
+    resolution_text.0 = format!("Resolution: {}", *resolution);
 }
 
 fn add_or_remove_control_points(
@@ -216,7 +230,24 @@ fn spawn(
 
     commands.spawn((
         Text::new(
-            "UP/DOWN arrow to add/remove control points",
+            "Resolution",
+        ),
+        TextFont {
+            font_size: 20.0,
+            ..default()
+        },
+        TextColor(Color::linear_rgb(0.0, 255.0, 0.0)),
+        ResolutionText,
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(20.0),
+            ..default()
+        },
+    ));
+
+    commands.spawn((
+        Text::new(
+            "UP/DOWN arrow to add/remove control points\nLEFT/RIGHT arrow for resolution",
         ),
         TextFont {
             font_size: 20.0,
